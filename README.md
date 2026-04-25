@@ -11,20 +11,20 @@ directly in your panel, with a detailed popup on click.
 
 | Metric | Source | Notes |
 |--------|--------|-------|
-| **CPU Usage** | `/proc/stat` | Two-sample measurement |
+| **CPU Usage** | `/proc/stat` | Delta between widget refreshes |
 | **CPU Temperature** | `lm_sensors` / sysfs | Intel Core, AMD Tctl/Tdie, thermal zones |
 | **GPU Usage** | Auto-detected | Intel (RC6), AMD (`gpu_busy_percent`), NVIDIA (`nvidia-smi`) |
 | **RAM** | `/proc/meminfo` | Used/Total in GB + percentage |
 | **Swap** | `/proc/meminfo` | Hidden if 0% (configurable) |
 | **ZRAM** | `/sys/block/zram0` | Hidden if not present |
 | **Disk** | `df` | Root partition usage |
-| **Network** | `/sys/class/net/` | Auto-detected interface, ↓/↑ throughput |
+| **Network** | `/sys/class/net/` | Auto-detected interface, cached ↓/↑ throughput |
 
 ### Panel View (Compact)
-Compact one-line display with Nerd Font icons and color-coded values:
+Compact one-line display with Nerd Font icons and white values:
 
 ```
-󰍛 23%  󰢮 5%   51°  󰘚 64%  󰋊 45%  ↓1.2 MB/s ↑120 KB/s
+󰍛 23%  󰢮 5%   51°  󰘚 64%   18%  󰟜 4%  󰋊 45%  ↓1.2 MB/s ↑120 KB/s
 ```
 
 ### Popup View (Full)
@@ -34,8 +34,10 @@ detailed values (e.g. "5.2 / 15.5 GB"), and GPU type indicator.
 ### Configuration
 Right-click → Configure to:
 - Choose which metrics appear in the panel
+- Toggle Swap/ZRAM in the panel when available
+- Adjust panel icon size, text size, icon/value spacing, and metric spacing
 - Set the update interval (1–10 seconds)
-- Toggle Swap/ZRAM visibility
+- Keep Swap/ZRAM visible in the detailed view even at 0%
 
 ---
 

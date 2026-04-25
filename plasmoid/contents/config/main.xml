@@ -12,6 +12,30 @@
             <min>1000</min>
             <max>10000</max>
         </entry>
+        <entry name="panelIconSize" type="Int">
+            <default>16</default>
+            <label>Panel icon size in pixels</label>
+            <min>10</min>
+            <max>40</max>
+        </entry>
+        <entry name="panelTextSize" type="Int">
+            <default>12</default>
+            <label>Panel text size in pixels</label>
+            <min>8</min>
+            <max>32</max>
+        </entry>
+        <entry name="panelIconTextSpacing" type="Int">
+            <default>2</default>
+            <label>Spacing between icon and value in the panel</label>
+            <min>0</min>
+            <max>20</max>
+        </entry>
+        <entry name="panelMetricSpacing" type="Int">
+            <default>6</default>
+            <label>Spacing between metrics in the panel</label>
+            <min>0</min>
+            <max>40</max>
+        </entry>
         <entry name="showCpu" type="Bool">
             <default>true</default>
             <label>Show CPU usage in panel</label>
@@ -28,13 +52,21 @@
             <default>true</default>
             <label>Show RAM usage in panel</label>
         </entry>
+        <entry name="showSwapInPanel" type="Bool">
+            <default>true</default>
+            <label>Show Swap usage in panel when swap is available</label>
+        </entry>
+        <entry name="showZramInPanel" type="Bool">
+            <default>true</default>
+            <label>Show ZRAM usage in panel when ZRAM is available</label>
+        </entry>
         <entry name="showSwap" type="Bool">
             <default>false</default>
-            <label>Show Swap usage</label>
+            <label>Show Swap row in the detailed view even when usage is 0%</label>
         </entry>
         <entry name="showZram" type="Bool">
             <default>false</default>
-            <label>Show ZRAM usage</label>
+            <label>Show ZRAM row in the detailed view even when usage is 0%</label>
         </entry>
         <entry name="showDisk" type="Bool">
             <default>true</default>

@@ -8,181 +8,310 @@
 # Optional: lm_sensors (for CPU temp), nvidia-smi (for NVIDIA GPUs)
 # ============================================================================
 
-# --- CPU Usage ---
-# Two-sample measurement from /proc/stat
-read -ra cpu1 < <(grep '^cpu ' /proc/stat)
-sleep 0.3
-read -ra cpu2 < <(grep '^cpu ' /proc/stat)
+export LC_ALL=C
 
-idle1=${cpu1[4]}; idle2=${cpu2[4]}
-total1=0; total2=0
-for v in "${cpu1[@]:1}"; do ((total1 += v)); done
-for v in "${cpu2[@]:1}"; do ((total2 += v)); done
+STATE_DIR="/tmp/plasma-commandoutput-metrics"
+STATE_FILE="$STATE_DIR/state"
+mkdir -p "$STATE_DIR"
 
-diff_total=$((total2 - total1))
-diff_idle=$((idle2 - idle1))
-if ((diff_total > 0)); then
-    cpu_use=$((100 * (diff_total - diff_idle) / diff_total))
-else
-    cpu_use=0
+state_timestamp_ms=""
+state_cpu_idle=""
+state_cpu_total=""
+state_iface=""
+state_rx=""
+state_tx=""
+state_intel_card=""
+state_intel_rc6=""
+
+load_state() {
+    [[ -r "$STATE_FILE" ]] || return 0
+
+    while IFS='=' read -r key value; do
+        case "$key" in
+            timestamp_ms) state_timestamp_ms=$value ;;
+            cpu_idle) state_cpu_idle=$value ;;
+            cpu_total) state_cpu_total=$value ;;
+            iface) state_iface=$value ;;
+            rx) state_rx=$value ;;
+            tx) state_tx=$value ;;
+            intel_card) state_intel_card=$value ;;
+            intel_rc6) state_intel_rc6=$value ;;
+        esac
+    done < "$STATE_FILE"
+}
+
+save_state() {
+    cat > "$STATE_FILE" <<EOF
+timestamp_ms=$now_ms
+cpu_idle=$idle_now
+cpu_total=$total_now
+iface=$iface
+rx=$rx_now
+tx=$tx_now
+intel_card=$intel_card_id
+intel_rc6=$intel_rc6_now
+EOF
+}
+
+clamp_percent() {
+    local value=${1:-0}
+
+    ((value < 0)) && value=0
+    ((value > 100)) && value=100
+    printf "%d" "$value"
+}
+
+format_rate() {
+    local bytes_per_second=${1:-0}
+
+    if ((bytes_per_second < 1024)); then
+        printf "%d B/s" "$bytes_per_second"
+    elif ((bytes_per_second < 1048576)); then
+        awk "BEGIN {printf \"%.1f KB/s\", $bytes_per_second / 1024}"
+    elif ((bytes_per_second < 1073741824)); then
+        awk "BEGIN {printf \"%.2f MB/s\", $bytes_per_second / 1048576}"
+    else
+        awk "BEGIN {printf \"%.2f GB/s\", $bytes_per_second / 1073741824}"
+    fi
+}
+
+read_first_temperature() {
+    sed -nE 's/.*\+([0-9]+)(\.[0-9]+)?.*/\1/p' | head -n1
+}
+
+is_physical_interface() {
+    local path=$1
+    [[ -e "$path/device" || -d "$path/wireless" ]]
+}
+
+choose_network_interface() {
+    local candidate=""
+    local path=""
+    local iface_name=""
+    local state=""
+
+    candidate=$(awk '$2 == "00000000" { print $1; exit }' /proc/net/route 2>/dev/null)
+    if [[ -n "$candidate" && -d "/sys/class/net/$candidate" && "$candidate" != "lo" ]]; then
+        printf "%s" "$candidate"
+        return 0
+    fi
+
+    if [[ -n "$state_iface" && -d "/sys/class/net/$state_iface" && "$state_iface" != "lo" ]] \
+        && is_physical_interface "/sys/class/net/$state_iface"; then
+        printf "%s" "$state_iface"
+        return 0
+    fi
+
+    for path in /sys/class/net/*; do
+        [[ -d "$path" ]] || continue
+        iface_name=$(basename "$path")
+        [[ "$iface_name" == "lo" ]] && continue
+        state=$(cat "$path/operstate" 2>/dev/null)
+        if is_physical_interface "$path" && [[ "$state" == "up" || "$state" == "unknown" ]]; then
+            printf "%s" "$iface_name"
+            return 0
+        fi
+    done
+
+    for path in /sys/class/net/*; do
+        [[ -d "$path" ]] || continue
+        iface_name=$(basename "$path")
+        [[ "$iface_name" == "lo" ]] && continue
+        state=$(cat "$path/operstate" 2>/dev/null)
+        if [[ "$state" == "up" || "$state" == "unknown" ]]; then
+            printf "%s" "$iface_name"
+            return 0
+        fi
+    done
+
+    for path in /sys/class/net/*; do
+        [[ -d "$path" ]] || continue
+        iface_name=$(basename "$path")
+        [[ "$iface_name" == "lo" ]] && continue
+        printf "%s" "$iface_name"
+        return 0
+    done
+
+    printf "lo"
+}
+
+load_state
+
+now_ms=$(date +%s%3N 2>/dev/null)
+if [[ ! "$now_ms" =~ ^[0-9]+$ ]]; then
+    now_ms=$(( $(date +%s) * 1000 ))
 fi
+
+delta_ms=0
+if [[ "$state_timestamp_ms" =~ ^[0-9]+$ ]] && ((now_ms > state_timestamp_ms)); then
+    delta_ms=$((now_ms - state_timestamp_ms))
+fi
+
+# --- CPU Usage ---
+read -ra cpu_now < <(grep '^cpu ' /proc/stat)
+idle_now=${cpu_now[4]}
+total_now=0
+for value in "${cpu_now[@]:1}"; do
+    ((total_now += value))
+done
+
+cpu_use=0
+if [[ "$state_cpu_idle" =~ ^[0-9]+$ && "$state_cpu_total" =~ ^[0-9]+$ ]]; then
+    cpu_total_diff=$((total_now - state_cpu_total))
+    cpu_idle_diff=$((idle_now - state_cpu_idle))
+    if ((cpu_total_diff > 0)); then
+        cpu_use=$((100 * (cpu_total_diff - cpu_idle_diff) / cpu_total_diff))
+    fi
+fi
+cpu_use=$(clamp_percent "$cpu_use")
 
 # --- CPU Temperature (average of all cores) ---
 cpu_temp=0
-if command -v sensors &>/dev/null; then
-    # Try Core X: entries first (Intel / some AMD)
-    mapfile -t temps < <(sensors 2>/dev/null | grep -oP 'Core \d+:\s+\+\K[0-9]+')
+if command -v sensors >/dev/null 2>&1; then
+    mapfile -t temps < <(sensors 2>/dev/null | sed -nE 's/^Core [0-9]+: +\+([0-9]+)(\.[0-9]+)?.*/\1/p')
     if ((${#temps[@]} > 0)); then
         sum=0
-        for t in "${temps[@]}"; do ((sum += t)); done
+        for temp in "${temps[@]}"; do
+            ((sum += temp))
+        done
         cpu_temp=$((sum / ${#temps[@]}))
     else
-        # Fallback: try Tctl/Tdie (AMD Ryzen)
-        amd_temp=$(sensors 2>/dev/null | grep -oP '(Tctl|Tdie):\s+\+\K[0-9]+' | head -n1)
+        amd_temp=$(sensors 2>/dev/null | sed -nE 's/^(Tctl|Tdie): +\+([0-9]+)(\.[0-9]+)?.*/\2/p' | head -n1)
         if [[ -n "$amd_temp" ]]; then
             cpu_temp=$amd_temp
         else
-            # Last resort: grab any temperature
-            cpu_temp=$(sensors 2>/dev/null | grep -oP '\+\K[0-9]+(?=\.[0-9]*°C)' | head -n1)
-            cpu_temp=${cpu_temp:-0}
+            fallback_temp=$(sensors 2>/dev/null | read_first_temperature)
+            cpu_temp=${fallback_temp:-0}
         fi
     fi
 else
-    # Fallback: sysfs thermal zones
-    total=0; count=0
-    for f in /sys/class/thermal/thermal_zone*/temp; do
-        [[ -f "$f" ]] || continue
-        val=$(<"$f")
-        ((val > 0)) || continue
-        ((total += val))
-        ((count++))
+    thermal_total=0
+    thermal_count=0
+    for path in /sys/class/thermal/thermal_zone*/temp; do
+        [[ -f "$path" ]] || continue
+        value=$(<"$path")
+        ((value > 0)) || continue
+        ((thermal_total += value))
+        ((thermal_count++))
     done
-    ((count > 0)) && cpu_temp=$((total / count / 1000))
+    if ((thermal_count > 0)); then
+        cpu_temp=$((thermal_total / thermal_count / 1000))
+    fi
 fi
 
 # --- RAM ---
-total_mem=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
-avail_mem=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+total_mem=$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)
+avail_mem=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
 if ((total_mem > 0)); then
-    ram_used=$(( (total_mem - avail_mem) * 100 / total_mem ))
+    ram_used=$(((total_mem - avail_mem) * 100 / total_mem))
     ram_total_gb=$(awk "BEGIN {printf \"%.1f\", $total_mem / 1048576}")
     ram_used_gb=$(awk "BEGIN {printf \"%.1f\", ($total_mem - $avail_mem) / 1048576}")
 else
-    ram_used=0; ram_total_gb="0"; ram_used_gb="0"
+    ram_used=0
+    ram_total_gb="0"
+    ram_used_gb="0"
 fi
 
 # --- SWAP ---
-swap_total=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)
-swap_free=$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)
+swap_total=$(awk '/^SwapTotal:/ { print $2 }' /proc/meminfo)
+swap_free=$(awk '/^SwapFree:/ { print $2 }' /proc/meminfo)
+has_swap=false
 if ((swap_total > 0)); then
-    swap_used=$(( (swap_total - swap_free) * 100 / swap_total ))
+    swap_used=$(((swap_total - swap_free) * 100 / swap_total))
+    has_swap=true
 else
     swap_used=0
 fi
 
 # --- ZRAM ---
 zram_used=0
-if [[ -f /sys/block/zram0/mm_stat ]]; then
+has_zram=false
+if [[ -f /sys/block/zram0/mm_stat && -f /sys/block/zram0/disksize ]]; then
     read -ra zram_stats < /sys/block/zram0/mm_stat
-    zram_used_bytes=${zram_stats[0]}
+    zram_used_bytes=${zram_stats[0]:-0}
     zram_max_bytes=$(</sys/block/zram0/disksize)
-    ((zram_max_bytes > 0)) && zram_used=$((zram_used_bytes * 100 / zram_max_bytes))
+    if ((zram_max_bytes > 0)); then
+        zram_used=$((zram_used_bytes * 100 / zram_max_bytes))
+        has_zram=true
+    fi
 fi
 
 # --- DISK ---
-read -r disk_used_pct disk_total disk_used_h < <(df -h / | awk 'NR==2 {gsub(/%/,"",$5); print $5, $2, $3}')
+read -r disk_used_pct disk_total disk_used_h < <(df -h / | awk 'NR == 2 { gsub(/%/, "", $5); print $5, $2, $3 }')
+disk_used_pct=${disk_used_pct:-0}
+disk_total=${disk_total:-0}
+disk_used_h=${disk_used_h:-0}
 
-# --- Network (auto-detect active interface) ---
-best_iface=""
-best_diff=0
-for i in /sys/class/net/*; do
-    iface=$(basename "$i")
-    [[ "$iface" == "lo" ]] && continue
-    [[ -f "$i/statistics/rx_bytes" ]] || continue
-    rx1=$(<"$i/statistics/rx_bytes")
-    sleep 0.15
-    rx2=$(<"$i/statistics/rx_bytes")
-    diff=$((rx2 - rx1))
-    if ((diff > best_diff)); then
-        best_diff=$diff
-        best_iface=$iface
+# --- Network ---
+iface=$(choose_network_interface)
+rx_now=0
+tx_now=0
+rx_bps=0
+tx_bps=0
+
+if [[ -r "/sys/class/net/$iface/statistics/rx_bytes" && -r "/sys/class/net/$iface/statistics/tx_bytes" ]]; then
+    rx_now=$(<"/sys/class/net/$iface/statistics/rx_bytes")
+    tx_now=$(<"/sys/class/net/$iface/statistics/tx_bytes")
+
+    if [[ "$state_iface" == "$iface" && "$state_rx" =~ ^[0-9]+$ && "$state_tx" =~ ^[0-9]+$ ]] && ((delta_ms > 0)); then
+        rx_diff=$((rx_now - state_rx))
+        tx_diff=$((tx_now - state_tx))
+        ((rx_diff < 0)) && rx_diff=0
+        ((tx_diff < 0)) && tx_diff=0
+        rx_bps=$((rx_diff * 1000 / delta_ms))
+        tx_bps=$((tx_diff * 1000 / delta_ms))
     fi
-done
-
-# Fallback: first non-lo interface with carrier
-if [[ -z "$best_iface" ]]; then
-    for i in /sys/class/net/*; do
-        iface=$(basename "$i")
-        [[ "$iface" == "lo" ]] && continue
-        if [[ -f "$i/carrier" ]] && [[ "$(<"$i/carrier" 2>/dev/null)" == "1" ]]; then
-            best_iface=$iface
-            break
-        fi
-    done
 fi
-iface=${best_iface:-"lo"}
 
-# Measure throughput
-rx1=$(<"/sys/class/net/$iface/statistics/rx_bytes")
-tx1=$(<"/sys/class/net/$iface/statistics/tx_bytes")
-sleep 0.5
-rx2=$(<"/sys/class/net/$iface/statistics/rx_bytes")
-tx2=$(<"/sys/class/net/$iface/statistics/tx_bytes")
-rx_bps=$(( (rx2 - rx1) * 2 ))  # scale to per-second (0.5s sample)
-tx_bps=$(( (tx2 - tx1) * 2 ))
-
-format_rate() {
-    local b=$1
-    if ((b < 1024)); then
-        printf "%d B/s" "$b"
-    elif ((b < 1048576)); then
-        awk "BEGIN {printf \"%.1f KB/s\", $b/1024}"
-    else
-        awk "BEGIN {printf \"%.2f MB/s\", $b/1048576}"
-    fi
-}
 rx_human=$(format_rate "$rx_bps")
 tx_human=$(format_rate "$tx_bps")
 
 # --- GPU (auto-detect: Intel / AMD / NVIDIA) ---
 gpu_use=0
 gpu_type="none"
+intel_card_id=""
+intel_rc6_now=""
 
-# Try Intel (RC6 residency – works on Gen6+ without special tools)
-for card in /sys/class/drm/card*/; do
-    if [[ -r "${card}power/rc6_residency_ms" ]]; then
+for card in /sys/class/drm/card*; do
+    [[ -d "$card" ]] || continue
+    if [[ -r "$card/power/rc6_residency_ms" ]]; then
         gpu_type="intel"
-        r1=$(<"${card}power/rc6_residency_ms")
-        sleep 0.15
-        r2=$(<"${card}power/rc6_residency_ms")
-        idle=$((r2 - r1))
-        total=150  # ms
-        ((idle < 0)) && idle=0
-        ((idle > total)) && idle=$total
-        gpu_use=$((100 - (idle * 100 / total)))
+        intel_card_id=$(basename "$card")
+        intel_rc6_now=$(<"$card/power/rc6_residency_ms")
+        if [[ "$state_intel_card" == "$intel_card_id" && "$state_intel_rc6" =~ ^[0-9]+$ ]] && ((delta_ms > 0)); then
+            rc6_idle_ms=$((intel_rc6_now - state_intel_rc6))
+            ((rc6_idle_ms < 0)) && rc6_idle_ms=0
+            if ((rc6_idle_ms > delta_ms)); then
+                rc6_idle_ms=$delta_ms
+            fi
+            gpu_use=$((100 - (rc6_idle_ms * 100 / delta_ms)))
+        fi
         break
     fi
 done
 
-# Try AMD (gpu_busy_percent – works on amdgpu driver)
 if [[ "$gpu_type" == "none" ]]; then
-    for card in /sys/class/drm/card*/device/; do
-        if [[ -r "${card}gpu_busy_percent" ]]; then
+    for card in /sys/class/drm/card*/device; do
+        [[ -d "$card" ]] || continue
+        if [[ -r "$card/gpu_busy_percent" ]]; then
             gpu_type="amd"
-            gpu_use=$(<"${card}gpu_busy_percent")
+            gpu_use=$(<"$card/gpu_busy_percent")
             break
         fi
     done
 fi
 
-# Try NVIDIA (nvidia-smi)
-if [[ "$gpu_type" == "none" ]] && command -v nvidia-smi &>/dev/null; then
+if [[ "$gpu_type" == "none" ]] && command -v nvidia-smi >/dev/null 2>&1; then
     nv_use=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ')
-    if [[ -n "$nv_use" && "$nv_use" =~ ^[0-9]+$ ]]; then
+    if [[ "$nv_use" =~ ^[0-9]+$ ]]; then
         gpu_type="nvidia"
         gpu_use=$nv_use
     fi
 fi
+
+gpu_use=$(clamp_percent "$gpu_use")
+
+save_state
 
 # --- Output as JSON ---
 cat <<EOF
@@ -194,7 +323,9 @@ cat <<EOF
   "ram": $ram_used,
   "ram_total_gb": "$ram_total_gb",
   "ram_used_gb": "$ram_used_gb",
+  "has_swap": $has_swap,
   "swap": $swap_used,
+  "has_zram": $has_zram,
   "zram": $zram_used,
   "disk": $disk_used_pct,
   "disk_total": "$disk_total",

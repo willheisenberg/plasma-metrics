@@ -1,0 +1,26 @@
+# Local tooling
+.codex/
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment helpers
+.direnv/
+.envrc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs / temporary outputs
+nohup.out
+*.log
+
+# Optional build / package artifacts
+build/
+dist/
+*.plasmoid

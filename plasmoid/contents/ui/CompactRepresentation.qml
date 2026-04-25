@@ -33,9 +33,12 @@ MouseArea {
     property bool showDisk: true
     property bool showNetwork: true
     readonly property color foregroundColor: "#ffffff"
+    readonly property int panelPadding: Kirigami.Units.smallSpacing
 
-    Layout.minimumWidth: metricsRow.implicitWidth + Kirigami.Units.smallSpacing * 2
-    Layout.preferredWidth: metricsRow.implicitWidth + Kirigami.Units.smallSpacing * 2
+    implicitHeight: metricsRow.implicitHeight + compactRoot.panelPadding * 2
+    Layout.minimumWidth: metricsRow.implicitWidth + compactRoot.panelPadding * 2
+    Layout.preferredWidth: metricsRow.implicitWidth + compactRoot.panelPadding * 2
+    Layout.minimumHeight: compactRoot.implicitHeight
     Layout.fillHeight: true
     hoverEnabled: true
     onClicked: Plasmoid.expanded = !Plasmoid.expanded
@@ -43,26 +46,28 @@ MouseArea {
     RowLayout {
         id: metricsRow
 
-        anchors.fill: parent
-        anchors.margins: Kirigami.Units.smallSpacing
+        anchors.centerIn: parent
         spacing: compactRoot.metricSpacing
 
         // --- CPU ---
         RowLayout {
             visible: compactRoot.showCpu
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: "󰍛"
                 font.family: "Symbols Nerd Font Mono"
                 font.pixelSize: compactRoot.iconSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: compactRoot.cpuUsage + "%"
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }
@@ -71,18 +76,21 @@ MouseArea {
         RowLayout {
             visible: compactRoot.showGpu && compactRoot.gpuType !== "none"
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: "󰢮"
                 font.family: "Symbols Nerd Font Mono"
                 font.pixelSize: compactRoot.iconSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: compactRoot.gpuUsage + "%"
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }
@@ -91,18 +99,21 @@ MouseArea {
         RowLayout {
             visible: compactRoot.showTemp
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: ""
                 font.family: "Symbols Nerd Font Mono"
                 font.pixelSize: compactRoot.iconSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: compactRoot.cpuTemp + "°"
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }
@@ -111,18 +122,21 @@ MouseArea {
         RowLayout {
             visible: compactRoot.showRam
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: "󰘚"
                 font.family: "Symbols Nerd Font Mono"
                 font.pixelSize: compactRoot.iconSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: compactRoot.ramUsage + "%"
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }
@@ -131,18 +145,21 @@ MouseArea {
         RowLayout {
             visible: compactRoot.showZram && compactRoot.hasZram
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: ""
                 font.family: "Symbols Nerd Font Mono"
                 font.pixelSize: compactRoot.iconSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: compactRoot.zramUsage + "%"
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }
@@ -151,18 +168,21 @@ MouseArea {
         RowLayout {
             visible: compactRoot.showSwap && compactRoot.hasSwap
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: "󰟜"
                 font.family: "Symbols Nerd Font Mono"
                 font.pixelSize: compactRoot.iconSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: compactRoot.swapUsage + "%"
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }
@@ -171,18 +191,21 @@ MouseArea {
         RowLayout {
             visible: compactRoot.showDisk
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: "󰋊"
                 font.family: "Symbols Nerd Font Mono"
                 font.pixelSize: compactRoot.iconSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: compactRoot.diskUsage + "%"
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }
@@ -191,17 +214,20 @@ MouseArea {
         RowLayout {
             visible: compactRoot.showNetwork
             spacing: compactRoot.iconTextSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
                 text: "↓" + compactRoot.netRx
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
             PlasmaComponents.Label {
                 text: "↑" + compactRoot.netTx
                 font.pixelSize: compactRoot.textSize
                 color: compactRoot.foregroundColor
+                Layout.alignment: Qt.AlignVCenter
             }
 
         }

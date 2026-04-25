@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Will Heisenberg"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Hardware-aware system metrics for your Plasma panel",
+        "Icon": "utilities-system-monitor",
+        "Id": "com.github.willheisenberg.systemmetrics",
+        "Name": "System Metrics",
+        "Version": "1.0",
+        "Website": "https://github.com/willheisenberg/plasma-commandoutput-metrics"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

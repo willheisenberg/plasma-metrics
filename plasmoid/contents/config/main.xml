@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+
+    <group name="General">
+        <entry name="updateInterval" type="Int">
+            <default>2000</default>
+            <label>Update interval in milliseconds</label>
+            <min>1000</min>
+            <max>10000</max>
+        </entry>
+        <entry name="showCpu" type="Bool">
+            <default>true</default>
+            <label>Show CPU usage in panel</label>
+        </entry>
+        <entry name="showGpu" type="Bool">
+            <default>true</default>
+            <label>Show GPU usage in panel</label>
+        </entry>
+        <entry name="showTemp" type="Bool">
+            <default>true</default>
+            <label>Show CPU temperature in panel</label>
+        </entry>
+        <entry name="showRam" type="Bool">
+            <default>true</default>
+            <label>Show RAM usage in panel</label>
+        </entry>
+        <entry name="showSwap" type="Bool">
+            <default>false</default>
+            <label>Show Swap usage</label>
+        </entry>
+        <entry name="showZram" type="Bool">
+            <default>false</default>
+            <label>Show ZRAM usage</label>
+        </entry>
+        <entry name="showDisk" type="Bool">
+            <default>true</default>
+            <label>Show disk usage in panel</label>
+        </entry>
+        <entry name="showNetwork" type="Bool">
+            <default>true</default>
+            <label>Show network throughput in panel</label>
+        </entry>
+    </group>
+</kcfg>

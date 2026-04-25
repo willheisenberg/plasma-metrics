@@ -1,76 +1,73 @@
 #!/usr/bin/env bash
 set -e
 
-echo "📊 Plasma Command Output Metrics Installer"
-echo "=========================================="
+echo "📊 System Metrics – Plasma 6 Widget Installer"
+echo "==============================================="
 echo
 
 # --- Locate script directory ---
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROFILES_DIR="$DIR/profiles"
+PLASMOID_DIR="$DIR/plasmoid"
 
-# --- Sanity check ---
-if [ ! -d "$PROFILES_DIR" ]; then
-    echo "❌ profiles/ directory not found."
+# --- Sanity checks ---
+if [ ! -d "$PLASMOID_DIR" ]; then
+    echo "❌ plasmoid/ directory not found in $DIR"
     exit 1
 fi
 
-# --- Collect profiles ---
-mapfile -t PROFILES < <(find "$PROFILES_DIR" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort)
-
-if [ "${#PROFILES[@]}" -eq 0 ]; then
-    echo "❌ No profiles found in profiles/."
+if ! command -v kpackagetool6 &>/dev/null; then
+    echo "❌ kpackagetool6 not found. Please install plasma-sdk:"
+    echo "   sudo pacman -S plasma-sdk   (Arch)"
+    echo "   sudo apt install plasma-sdk (Debian/Ubuntu)"
     exit 1
 fi
 
-# --- Show selection ---
-echo "Available hardware profiles:"
-echo
+WIDGET_ID="com.github.willheisenberg.systemmetrics"
 
-i=1
-for p in "${PROFILES[@]}"; do
-    echo "  [$i] $p"
-    ((i++))
-done
+# --- Make metrics script executable ---
+chmod +x "$PLASMOID_DIR/contents/scripts/metrics.sh"
 
-echo
-read -rp "Select profile [1-${#PROFILES[@]}]: " SELECTION
-
-# --- Validate input ---
-if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || (( SELECTION < 1 || SELECTION > ${#PROFILES[@]} )); then
-    echo "❌ Invalid selection."
-    exit 1
+# --- Check if already installed ---
+if kpackagetool6 -t Plasma/Applet -s "$WIDGET_ID" &>/dev/null; then
+    echo "🔄 Widget already installed. Upgrading..."
+    echo
+    kpackagetool6 -t Plasma/Applet -u "$PLASMOID_DIR"
+else
+    echo "📦 Installing widget..."
+    echo
+    kpackagetool6 -t Plasma/Applet -i "$PLASMOID_DIR"
 fi
 
-PROFILE="${PROFILES[$((SELECTION-1))]}"
-PROFILE_DIR="$PROFILES_DIR/$PROFILE"
-
 echo
-echo "➡️ Selected profile: $PROFILE"
-echo
-
-# --- Install location ---
-INSTALL_DIR="$HOME/.local/bin"
-mkdir -p "$INSTALL_DIR"
-
-# --- Install script ---
-if [ ! -f "$PROFILE_DIR/metrics.sh" ]; then
-    echo "❌ metrics.sh not found in $PROFILE_DIR"
-    exit 1
-fi
-
-install -m 755 "$PROFILE_DIR/metrics.sh" "$INSTALL_DIR/plasma-metrics.sh"
-
-# --- Done ---
 echo "✅ Installation complete!"
 echo
-echo "Installed script:"
-echo "  $INSTALL_DIR/plasma-metrics.sh"
+echo "Widget ID: $WIDGET_ID"
 echo
-echo "Plasma setup:"
-echo "  Command:        $INSTALL_DIR/plasma-metrics.sh"
-echo "  Update interval: 1–2 seconds"
+echo "Next steps:"
+echo "  1. Right-click your Plasma panel → 'Add Widgets...'"
+echo "  2. Search for 'System Metrics'"
+echo "  3. Drag it to your panel"
+echo "  4. Right-click the widget → 'Configure...' to customize"
 echo
-echo "ℹ️ Make sure the Command Output widget is installed:"
-echo "   https://github.com/Zren/plasma-applet-commandoutput"
+echo "To test without adding to panel:"
+echo "  plasmawindowed $WIDGET_ID"
+echo
+echo "To uninstall:"
+echo "  kpackagetool6 -t Plasma/Applet -r $WIDGET_ID"
+echo
+
+# --- Check optional dependencies ---
+echo "📋 Optional dependencies check:"
+if command -v sensors &>/dev/null; then
+    echo "  ✅ lm_sensors (CPU temperature)"
+else
+    echo "  ⚠️  lm_sensors not found – CPU temperature may be inaccurate"
+    echo "     Install: sudo pacman -S lm_sensors"
+fi
+
+if command -v nvidia-smi &>/dev/null; then
+    echo "  ✅ nvidia-smi (NVIDIA GPU monitoring)"
+else
+    echo "  ℹ️  nvidia-smi not found – OK if you don't have an NVIDIA GPU"
+fi
 echo

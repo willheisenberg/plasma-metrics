@@ -1,193 +1,138 @@
-# 📊 Plasma Command Output Metrics
+# 📊 System Metrics – KDE Plasma 6 Widget
 
-A collection of **hardware-aware system metrics scripts** for  
-**KDE Plasma’s Command Output widget**.
+A **native KDE Plasma 6 widget** that displays real-time system metrics
+directly in your panel, with a detailed popup on click.
 
-Designed for:
-- Plasma 6
-- Wayland
-- Nerd Font icons
-- minimal overhead
-- no Python, no daemons
+**Hardware-agnostic** – automatically detects your CPU, GPU, and sensors.
 
 ---
 
 ## ✨ Features
 
-- CPU usage
-- CPU temperature (multi-core aware)
-- RAM, Swap, ZRAM usage
-- Disk usage
-- Network throughput (auto-detected interface)
-- GPU usage (kernel-native where possible)
-- Nerd Font icons for compact panel display
+| Metric | Source | Notes |
+|--------|--------|-------|
+| **CPU Usage** | `/proc/stat` | Two-sample measurement |
+| **CPU Temperature** | `lm_sensors` / sysfs | Intel Core, AMD Tctl/Tdie, thermal zones |
+| **GPU Usage** | Auto-detected | Intel (RC6), AMD (`gpu_busy_percent`), NVIDIA (`nvidia-smi`) |
+| **RAM** | `/proc/meminfo` | Used/Total in GB + percentage |
+| **Swap** | `/proc/meminfo` | Hidden if 0% (configurable) |
+| **ZRAM** | `/sys/block/zram0` | Hidden if not present |
+| **Disk** | `df` | Root partition usage |
+| **Network** | `/sys/class/net/` | Auto-detected interface, ↓/↑ throughput |
 
----
+### Panel View (Compact)
+Compact one-line display with Nerd Font icons and color-coded values:
 
-## 🧠 Philosophy
-
-System metrics are **not universal**.
-
-Different hardware requires different approaches:
-- Intel vs AMD
-- iGPU vs dGPU
-- RC6 vs sysfs vs vendor tools
-- laptops vs desktops
-
-This repository therefore uses **hardware profiles** instead of one fragile script.
-
----
-
-## 📁 Repository Structure Example
-
-# 📊 Plasma Command Output Metrics
-
-A collection of **hardware-aware system metrics scripts** for  
-**KDE Plasma’s Command Output widget**.
-
-Designed for:
-- Plasma 6
-- Wayland
-- Nerd Font icons
-- minimal overhead
-- no Python, no daemons
-
----
-
-## ✨ Features
-
-- CPU usage
-- CPU temperature (multi-core aware)
-- RAM, Swap, ZRAM usage
-- Disk usage
-- Network throughput (auto-detected interface)
-- GPU usage (kernel-native where possible)
-- Nerd Font icons for compact panel display
-
----
-
-## 🧠 Philosophy
-
-System metrics are **not universal**.
-
-Different hardware requires different approaches:
-- Intel vs AMD
-- iGPU vs dGPU
-- RC6 vs sysfs vs vendor tools
-- laptops vs desktops
-
-This repository therefore uses **hardware profiles** instead of one fragile script.
-
----
-
-## 📁 Repository Structure Example
-
-```text
-profiles/
-├── intel-skylake-ult/
-│   └── metrics.sh
-├── amd-ryzen-apu/
-│   └── metrics.sh
-├── nvidia-desktop/
-│   └── metrics.sh
-└── generic/
-    └── metrics.sh
+```
+󰍛 23%  󰢮 5%   51°  󰘚 64%  󰋊 45%  ↓1.2 MB/s ↑120 KB/s
 ```
 
+### Popup View (Full)
+Click the panel widget to see all metrics with animated progress bars,
+detailed values (e.g. "5.2 / 15.5 GB"), and GPU type indicator.
 
-Each profile targets a **specific hardware family**.
-
----
-
-## 💻 Supported Hardware (initial)
-
-### Intel Skylake U-Series (Ultrabooks)
-- CPU: i5-6200U, i7-6500U, i7-6600U
-- GPU: Intel HD 520 (Gen9)
-- Kernel GPU metrics via RC6 residency
-
-Profile:
-
-profiles/intel-skylake-ult/
+### Configuration
+Right-click → Configure to:
+- Choose which metrics appear in the panel
+- Set the update interval (1–10 seconds)
+- Toggle Swap/ZRAM visibility
 
 ---
 
-## 📦 Requirements
+## 📦 Installation
 
+### Requirements
 - KDE Plasma 6.x
-- Command Output widget  
-  👉 https://github.com/Zren/plasma-applet-commandoutput
-- Nerd Font (recommended)
-  ```bash
-  sudo pacman -S ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono
+- `plasma-sdk` (for `kpackagetool6`)
+- Nerd Font (recommended): `sudo pacman -S ttf-nerd-fonts-symbols`
 
-## Optional (per profile)
+### Optional
+- `lm_sensors` – for accurate CPU temperature
+- `nvidia-smi` – for NVIDIA GPU monitoring (comes with NVIDIA drivers)
 
-Depending on the hardware profile, the following tools may be used:
+### Install
 
-- `lm_sensors`
-- `perf`
-- `intel-gpu-tools`
-- `jq`
+```bash
+git clone https://github.com/willheisenberg/plasma-commandoutput-metrics.git
+cd plasma-commandoutput-metrics
+./install.sh
+```
+
+### Manual Install
+
+```bash
+kpackagetool6 -t Plasma/Applet -i plasmoid/
+```
+
+### Update
+
+```bash
+kpackagetool6 -t Plasma/Applet -u plasmoid/
+```
+
+### Uninstall
+
+```bash
+kpackagetool6 -t Plasma/Applet -r com.github.willheisenberg.systemmetrics
+```
 
 ---
 
-## 🧩 Usage
+## 🖥️ Supported Hardware
 
-1. Install the **Command Output** widget  
-   👉 https://github.com/Zren/plasma-applet-commandoutput
+### CPU
+All x86/x86_64 CPUs (Intel and AMD) – uses `/proc/stat` which is universal.
 
-2. Add it to your KDE Plasma panel
+### GPU
+| Vendor | Method | Requirements |
+|--------|--------|-------------|
+| **Intel** (Gen6+) | RC6 residency via sysfs | None (kernel-native) |
+| **AMD** (amdgpu) | `gpu_busy_percent` via sysfs | None (kernel-native) |
+| **NVIDIA** | `nvidia-smi` query | `nvidia-smi` (included with NVIDIA drivers) |
 
-3. Set the command to a hardware profile script, for example:
+### Temperature
+| Vendor | Method |
+|--------|--------|
+| **Intel** | `sensors` → "Core X:" entries |
+| **AMD Ryzen** | `sensors` → "Tctl" / "Tdie" entries |
+| **Fallback** | `/sys/class/thermal/thermal_zone*/temp` |
 
-   ```bash
-   ~/plasma-commandoutput-metrics/profiles/intel-skylake-ult/metrics.sh
+---
 
-4. Set the update interval:
-    1–2 seconds (depending on script complexity)
+## 🧩 Project Structure
 
+```
+plasmoid/
+├── metadata.json                     # Widget metadata (Plasma 6)
+└── contents/
+    ├── ui/
+    │   ├── main.qml                  # Entry point (PlasmoidItem)
+    │   ├── CompactRepresentation.qml # Panel view
+    │   └── FullRepresentation.qml    # Popup view
+    ├── config/
+    │   ├── main.xml                  # Configuration schema
+    │   └── config.qml                # Configuration UI
+    └── scripts/
+        └── metrics.sh                # Hardware-agnostic metrics (JSON)
+```
+
+### Legacy Profiles
+The original hardware-specific shell scripts remain in `profiles/` for
+reference, but are no longer needed – the plasmoid's `metrics.sh` handles
+all hardware automatically.
 
 ---
 
 ## 🚧 Contributing
 
-Contributions are welcome.
+Contributions are welcome! Please:
 
-Please follow these guidelines:
-
-- Add new hardware as separate profiles
-- Clearly document kernel interfaces used
-- Avoid vendor-specific userland tools where possible
+- Test on your hardware (especially non-Intel GPUs)
+- Report which sensors/GPU methods work or fail
+- Follow the existing code style
 
 ---
 
 ## 📜 License
 
 MIT
-
----
-
-## Summary
-
-- **Repository:** `plasma-commandoutput-metrics`
-- **Description:**  
-  *Hardware-aware system metrics scripts for KDE Plasma Command Output widget*
-- **Profile directory for this system:**  
-  `profiles/intel-skylake-ult/`
-
----
-
-If you want to continue, next steps could be:
-
-- an `install.sh` with profile selection
-- automatic hardware detection (`lscpu`, `lspci`)
-- an additional profile for another machine (e.g. your Ryzen laptop `heisenberg`)
-
----
-
-If you want, I can also provide next:
-
-- the **auto-detection concept** as Markdown
-- a **profile matrix table** (CPU/GPU → profile)
-- or a **contribution template** (`CONTRIBUTING.md`)

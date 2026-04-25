@@ -79,6 +79,125 @@ read_first_temperature() {
     sed -nE 's/.*\+([0-9]+)(\.[0-9]+)?.*/\1/p' | head -n1
 }
 
+read_average_core_temperature() {
+    local sum=0
+    local count=0
+    local temp=""
+
+    while IFS= read -r temp; do
+        [[ -n "$temp" ]] || continue
+        ((sum += temp))
+        ((count++))
+    done
+
+    if ((count > 0)); then
+        printf "%d" "$((sum / count))"
+    fi
+}
+
+find_cpu_temperature_from_sensors() {
+    awk '
+        BEGIN {
+            best_score = -1
+            best_temp = ""
+            chip = ""
+        }
+
+        /^[[:space:]]*$/ {
+            chip = ""
+            next
+        }
+
+        chip == "" {
+            chip = $0
+            next
+        }
+
+        /^Adapter:/ {
+            next
+        }
+
+        /^[^:]+:[[:space:]]+\+[0-9]+(\.[0-9]+)?/ {
+            label = $0
+            sub(/:.*/, "", label)
+
+            temp = $0
+            sub(/^[^:]+:[[:space:]]+\+/, "", temp)
+            sub(/[^0-9.].*/, "", temp)
+            temp = int(temp + 0)
+
+            chip_l = tolower(chip)
+            label_l = tolower(label)
+            score = -1
+
+            if (label ~ /^Package id [0-9]+$/ || label ~ /^Physical id [0-9]+$/) {
+                score = 95
+            } else if (label == "Tdie") {
+                score = 94
+            } else if (label == "Tctl") {
+                score = 93
+            } else if (label_l ~ /^cpu([ @:_-].*)?$/ || label_l == "peci agent 0") {
+                score = 90
+            } else if (chip_l ~ /(coretemp|k10temp|k8temp|zenpower|fam15h_power|cpu_thermal|x86_pkg_temp)/) {
+                score = 80
+            } else if ((chip_l ~ /(acpitz|cros_ec|thinkpad|asus_ec|it87|nct|f718|f753)/) && label_l ~ /^cpu/) {
+                score = 70
+            }
+
+            if (score > best_score) {
+                best_score = score
+                best_temp = temp
+            }
+        }
+
+        END {
+            if (best_score >= 0) {
+                print best_temp
+            }
+        }
+    '
+}
+
+find_cpu_temperature_from_thermal_zones() {
+    local path=""
+    local temp_raw=""
+    local temp_c=0
+    local zone_type=""
+    local zone_type_l=""
+    local cpu_sum=0
+    local cpu_count=0
+    local fallback_max=0
+
+    for path in /sys/class/thermal/thermal_zone*; do
+        [[ -d "$path" && -r "$path/temp" ]] || continue
+
+        temp_raw=$(<"$path/temp")
+        [[ "$temp_raw" =~ ^[0-9]+$ ]] || continue
+        ((temp_raw > 0)) || continue
+
+        temp_c=$((temp_raw / 1000))
+        ((temp_c > 0)) || continue
+
+        if ((temp_c > fallback_max)); then
+            fallback_max=$temp_c
+        fi
+
+        zone_type=$(<"$path/type" 2>/dev/null)
+        zone_type_l=${zone_type,,}
+
+        if [[ "$zone_type_l" =~ (x86_pkg_temp|cpu|pkg_temp|tcpu|cpu_thermal|soc_thermal|coretemp|k10temp) ]]; then
+            ((cpu_sum += temp_c))
+            ((cpu_count++))
+        fi
+    done
+
+    if ((cpu_count > 0)); then
+        printf "%d" "$((cpu_sum / cpu_count))"
+    elif ((fallback_max > 0)); then
+        printf "%d" "$fallback_max"
+    fi
+}
+
 is_physical_interface() {
     local path=$1
     [[ -e "$path/device" || -d "$path/wireless" ]]
@@ -165,38 +284,30 @@ if [[ "$state_cpu_idle" =~ ^[0-9]+$ && "$state_cpu_total" =~ ^[0-9]+$ ]]; then
 fi
 cpu_use=$(clamp_percent "$cpu_use")
 
-# --- CPU Temperature (average of all cores) ---
+# --- CPU Temperature ---
 cpu_temp=0
 if command -v sensors >/dev/null 2>&1; then
-    mapfile -t temps < <(sensors 2>/dev/null | sed -nE 's/^Core [0-9]+: +\+([0-9]+)(\.[0-9]+)?.*/\1/p')
-    if ((${#temps[@]} > 0)); then
-        sum=0
-        for temp in "${temps[@]}"; do
-            ((sum += temp))
-        done
-        cpu_temp=$((sum / ${#temps[@]}))
+    sensors_output=$(sensors 2>/dev/null)
+    avg_core_temp=$(printf "%s\n" "$sensors_output" | sed -nE 's/^Core [0-9]+: +\+([0-9]+)(\.[0-9]+)?.*/\1/p' | read_average_core_temperature)
+    if [[ -n "$avg_core_temp" ]]; then
+        cpu_temp=$avg_core_temp
     else
-        amd_temp=$(sensors 2>/dev/null | sed -nE 's/^(Tctl|Tdie): +\+([0-9]+)(\.[0-9]+)?.*/\2/p' | head -n1)
-        if [[ -n "$amd_temp" ]]; then
-            cpu_temp=$amd_temp
+        best_sensor_temp=$(printf "%s\n" "$sensors_output" | find_cpu_temperature_from_sensors)
+        if [[ -n "$best_sensor_temp" ]]; then
+            cpu_temp=$best_sensor_temp
         else
-            fallback_temp=$(sensors 2>/dev/null | read_first_temperature)
-            cpu_temp=${fallback_temp:-0}
+            fallback_temp=$(find_cpu_temperature_from_thermal_zones)
+            if [[ -n "$fallback_temp" ]]; then
+                cpu_temp=$fallback_temp
+            else
+                fallback_temp=$(printf "%s\n" "$sensors_output" | read_first_temperature)
+                cpu_temp=${fallback_temp:-0}
+            fi
         fi
     fi
 else
-    thermal_total=0
-    thermal_count=0
-    for path in /sys/class/thermal/thermal_zone*/temp; do
-        [[ -f "$path" ]] || continue
-        value=$(<"$path")
-        ((value > 0)) || continue
-        ((thermal_total += value))
-        ((thermal_count++))
-    done
-    if ((thermal_count > 0)); then
-        cpu_temp=$((thermal_total / thermal_count / 1000))
-    fi
+    fallback_temp=$(find_cpu_temperature_from_thermal_zones)
+    cpu_temp=${fallback_temp:-0}
 fi
 
 # --- RAM ---
@@ -226,14 +337,24 @@ fi
 # --- ZRAM ---
 zram_used=0
 has_zram=false
-if [[ -f /sys/block/zram0/mm_stat && -f /sys/block/zram0/disksize ]]; then
-    read -ra zram_stats < /sys/block/zram0/mm_stat
+zram_total_used_bytes=0
+zram_total_bytes=0
+for path in /sys/block/zram*; do
+    [[ -r "$path/mm_stat" && -r "$path/disksize" ]] || continue
+
+    read -ra zram_stats < "$path/mm_stat"
     zram_used_bytes=${zram_stats[0]:-0}
-    zram_max_bytes=$(</sys/block/zram0/disksize)
-    if ((zram_max_bytes > 0)); then
-        zram_used=$((zram_used_bytes * 100 / zram_max_bytes))
-        has_zram=true
+    zram_max_bytes=$(<"$path/disksize")
+
+    if [[ "$zram_used_bytes" =~ ^[0-9]+$ && "$zram_max_bytes" =~ ^[0-9]+$ ]] && ((zram_max_bytes > 0)); then
+        ((zram_total_used_bytes += zram_used_bytes))
+        ((zram_total_bytes += zram_max_bytes))
     fi
+done
+
+if ((zram_total_bytes > 0)); then
+    zram_used=$((zram_total_used_bytes * 100 / zram_total_bytes))
+    has_zram=true
 fi
 
 # --- DISK ---

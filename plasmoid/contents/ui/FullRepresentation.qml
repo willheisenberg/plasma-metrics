@@ -35,6 +35,10 @@ Item {
 
     implicitWidth: Kirigami.Units.gridUnit * 18
     implicitHeight: mainColumn.implicitHeight + Kirigami.Units.largeSpacing * 2
+    Layout.minimumWidth: fullRoot.implicitWidth
+    Layout.minimumHeight: fullRoot.implicitHeight
+    Layout.preferredWidth: fullRoot.implicitWidth
+    Layout.preferredHeight: fullRoot.implicitHeight
 
     ColumnLayout {
         id: mainColumn

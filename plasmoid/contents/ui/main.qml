@@ -122,6 +122,7 @@ PlasmoidItem {
     // --- Representations ---
     // Pass all data as explicit properties to avoid parent-chain issues
     compactRepresentation: CompactRepresentation {
+        plasmoidItem: root
         cpuUsage: root.cpuUsage
         cpuTemp: root.cpuTemp
         gpuUsage: root.gpuUsage

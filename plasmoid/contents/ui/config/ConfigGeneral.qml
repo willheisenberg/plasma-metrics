@@ -3,6 +3,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.plasma5support as Plasma5Support
 
 KCM.SimpleKCM {
     id: configRoot
@@ -22,6 +23,61 @@ KCM.SimpleKCM {
     property alias cfg_showZram: showZramCheck.checked
     property alias cfg_showDisk: showDiskCheck.checked
     property alias cfg_showNetwork: showNetworkCheck.checked
+    readonly property string scriptPath: decodeURIComponent(Qt.resolvedUrl("../../scripts/metrics.sh").toString().replace(/^file:\/\//, ""))
+    readonly property string scriptCommand: "bash '" + configRoot.scriptPath.replace(/'/g, "'\\''") + "'"
+    property bool metricProbeCompleted: false
+    property bool gpuMetricAvailable: true
+    property bool tempMetricAvailable: true
+    property bool swapMetricAvailable: true
+    property bool zramMetricAvailable: true
+
+    Plasma5Support.DataSource {
+        id: metricProbe
+
+        engine: "executable"
+        connectedSources: []
+
+        function exec(cmd) {
+            connectSource(cmd);
+        }
+
+        onNewData: (sourceName, data) => {
+            const stdout = data["stdout"] || "";
+            const exitCode = data["exit code"];
+
+            if (exitCode === 0 && stdout.length > 0) {
+                try {
+                    const metrics = JSON.parse(stdout);
+                    configRoot.gpuMetricAvailable = (metrics.gpu_type || "none") !== "none";
+                    configRoot.tempMetricAvailable = (metrics.cpu_temp || 0) > 0;
+                    configRoot.swapMetricAvailable = metrics.has_swap === undefined ? true : metrics.has_swap;
+                    configRoot.zramMetricAvailable = metrics.has_zram === undefined ? true : metrics.has_zram;
+
+                    if (!configRoot.gpuMetricAvailable)
+                        showGpuCheck.checked = false;
+                    if (!configRoot.tempMetricAvailable)
+                        showTempCheck.checked = false;
+                    if (!configRoot.swapMetricAvailable) {
+                        showSwapInPanelCheck.checked = false;
+                        showSwapCheck.checked = false;
+                    }
+                    if (!configRoot.zramMetricAvailable) {
+                        showZramInPanelCheck.checked = false;
+                        showZramCheck.checked = false;
+                    }
+                } catch (e) {
+                    console.error("System Metrics config probe parse error:", e, "stdout:", stdout);
+                }
+            }
+
+            configRoot.metricProbeCompleted = true;
+            disconnectSource(sourceName);
+        }
+    }
+
+    Component.onCompleted: {
+        metricProbe.exec(configRoot.scriptCommand);
+    }
 
     Kirigami.FormLayout {
         anchors.fill: parent
@@ -101,15 +157,17 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: showGpuCheck
 
-            Kirigami.FormData.label: "GPU usage:"
+            Kirigami.FormData.label: configRoot.gpuMetricAvailable ? "GPU usage:" : "GPU usage (not available):"
             checked: cfg_showGpu
+            enabled: configRoot.gpuMetricAvailable
         }
 
         QQC2.CheckBox {
             id: showTempCheck
 
-            Kirigami.FormData.label: "CPU temperature:"
+            Kirigami.FormData.label: configRoot.tempMetricAvailable ? "CPU temperature:" : "CPU temperature (not available):"
             checked: cfg_showTemp
+            enabled: configRoot.tempMetricAvailable
         }
 
         QQC2.CheckBox {
@@ -122,15 +180,17 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: showZramInPanelCheck
 
-            Kirigami.FormData.label: "ZRAM usage:"
+            Kirigami.FormData.label: configRoot.zramMetricAvailable ? "ZRAM usage:" : "ZRAM usage (not available):"
             checked: cfg_showZramInPanel
+            enabled: configRoot.zramMetricAvailable
         }
 
         QQC2.CheckBox {
             id: showSwapInPanelCheck
 
-            Kirigami.FormData.label: "Swap usage:"
+            Kirigami.FormData.label: configRoot.swapMetricAvailable ? "Swap usage:" : "Swap usage (not available):"
             checked: cfg_showSwapInPanel
+            enabled: configRoot.swapMetricAvailable
         }
 
         QQC2.CheckBox {
@@ -155,15 +215,24 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: showSwapCheck
 
-            Kirigami.FormData.label: "Show Swap when empty:"
+            Kirigami.FormData.label: configRoot.swapMetricAvailable ? "Show Swap when empty:" : "Show Swap when empty (not available):"
             checked: cfg_showSwap
+            enabled: configRoot.swapMetricAvailable
         }
 
         QQC2.CheckBox {
             id: showZramCheck
 
-            Kirigami.FormData.label: "Show ZRAM when empty:"
+            Kirigami.FormData.label: configRoot.zramMetricAvailable ? "Show ZRAM when empty:" : "Show ZRAM when empty (not available):"
             checked: cfg_showZram
+            enabled: configRoot.zramMetricAvailable
+        }
+
+        QQC2.Label {
+            visible: !configRoot.metricProbeCompleted
+            text: "Detecting available metrics on this system..."
+            color: Kirigami.Theme.disabledTextColor
+            wrapMode: Text.WordWrap
         }
 
     }

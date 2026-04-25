@@ -4,10 +4,11 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.plasmoid
 
-MouseArea {
+Item {
     id: compactRoot
 
     // --- Properties bound from main.qml ---
+    property PlasmoidItem plasmoidItem
     property int cpuUsage: 0
     property int cpuTemp: 0
     property int gpuUsage: 0
@@ -40,8 +41,6 @@ MouseArea {
     Layout.preferredWidth: metricsRow.implicitWidth + compactRoot.panelPadding * 2
     Layout.minimumHeight: compactRoot.implicitHeight
     Layout.fillHeight: true
-    hoverEnabled: true
-    onClicked: Plasmoid.expanded = !Plasmoid.expanded
 
     RowLayout {
         id: metricsRow
@@ -232,6 +231,22 @@ MouseArea {
 
         }
 
+    }
+
+    MouseArea {
+        id: clickArea
+
+        property bool wasExpanded: false
+
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onPressed: wasExpanded = compactRoot.plasmoidItem ? compactRoot.plasmoidItem.expanded : false
+        onClicked: {
+            if (compactRoot.plasmoidItem)
+                compactRoot.plasmoidItem.expanded = !clickArea.wasExpanded;
+        }
     }
 
 }

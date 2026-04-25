@@ -12,11 +12,11 @@ directly in your panel, with a detailed popup on click.
 | Metric | Source | Notes |
 |--------|--------|-------|
 | **CPU Usage** | `/proc/stat` | Delta between widget refreshes |
-| **CPU Temperature** | `lm_sensors` / sysfs | Intel Core, AMD Tctl/Tdie, thermal zones |
+| **CPU Temperature** | `lm_sensors` / sysfs | Prefers CPU-specific sensors, then thermal zones |
 | **GPU Usage** | Auto-detected | Intel (RC6), AMD (`gpu_busy_percent`), NVIDIA (`nvidia-smi`) |
 | **RAM** | `/proc/meminfo` | Used/Total in GB + percentage |
 | **Swap** | `/proc/meminfo` | Hidden if 0% (configurable) |
-| **ZRAM** | `/sys/block/zram0` | Hidden if not present |
+| **ZRAM** | `/sys/block/zram*` | Aggregates all ZRAM devices, hidden if not present |
 | **Disk** | `df` | Root partition usage |
 | **Network** | `/sys/class/net/` | Auto-detected interface, cached ↓/↑ throughput |
 
@@ -97,7 +97,8 @@ All x86/x86_64 CPUs (Intel and AMD) – uses `/proc/stat` which is universal.
 |--------|--------|
 | **Intel** | `sensors` → "Core X:" entries |
 | **AMD Ryzen** | `sensors` → "Tctl" / "Tdie" entries |
-| **Fallback** | `/sys/class/thermal/thermal_zone*/temp` |
+| **Other hardware** | `sensors` → CPU-like labels ("CPU", "Package id", etc.) |
+| **Fallback** | `/sys/class/thermal/thermal_zone*/temp` with CPU-first matching |
 
 ---
 

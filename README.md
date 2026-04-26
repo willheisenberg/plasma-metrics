@@ -1,5 +1,7 @@
 # 📊 System Metrics – KDE Plasma 6 Widget
 
+![System Metrics logo](assets/system-metrics-logo.png)
+
 A **native KDE Plasma 6 widget** that displays real-time system metrics
 directly in your panel, with a detailed popup on click.
 
